@@ -5,7 +5,7 @@ Chapter 5 source file for Machine Learing in Action
 '''
 from numpy import *
 from time import sleep
-
+#假设数据只有两列
 def loadDataSet(fileName):
     dataMat = []; labelMat = []
     fr = open(fileName)
@@ -27,22 +27,25 @@ def clipAlpha(aj,H,L):
     if L > aj:
         aj = L
     return aj
-
+#最后两个参数：容错率和退出前最大的循环次数
 def smoSimple(dataMatIn, classLabels, C, toler, maxIter):
-    dataMatrix = mat(dataMatIn); labelMat = mat(classLabels).transpose()
+    dataMatrix = mat(dataMatIn); labelMat = mat(classLabels).transpose()     #转置函数，或者 .T
     b = 0; m,n = shape(dataMatrix)
     alphas = mat(zeros((m,1)))
     iter = 0
     while (iter < maxIter):
         alphaPairsChanged = 0
+		#遍历每一个alpha i，而不是选择最优的两个参数对
         for i in range(m):
-            fXi = float(multiply(alphas,labelMat).T*(dataMatrix*dataMatrix[i,:].T)) + b
+            fXi = float(multiply(alphas,labelMat).T*(dataMatrix*dataMatrix[i,:].T)) + b    #multiply（）要求shape相同，（对应元素相乘），不然就进行广播
             Ei = fXi - float(labelMat[i])#if checks if an example violates KKT conditions
-            if ((labelMat[i]*Ei < -toler) and (alphas[i] < C)) or ((labelMat[i]*Ei > toler) and (alphas[i] > 0)):
+			
+            if ((labelMat[i]*Ei < -toler) and (alphas[i] < C)) or ((labelMat[i]*Ei > toler) and (alphas[i] > 0)):  #判断该数据向量是否可以被优化
                 j = selectJrand(i,m)
                 fXj = float(multiply(alphas,labelMat).T*(dataMatrix*dataMatrix[j,:].T)) + b
                 Ej = fXj - float(labelMat[j])
                 alphaIold = alphas[i].copy(); alphaJold = alphas[j].copy();
+				#（7.103约束条件）
                 if (labelMat[i] != labelMat[j]):
                     L = max(0, alphas[j] - alphas[i])
                     H = min(C, C + alphas[j] - alphas[i])
@@ -52,9 +55,10 @@ def smoSimple(dataMatIn, classLabels, C, toler, maxIter):
                 if L==H: print "L==H"; continue
                 eta = 2.0 * dataMatrix[i,:]*dataMatrix[j,:].T - dataMatrix[i,:]*dataMatrix[i,:].T - dataMatrix[j,:]*dataMatrix[j,:].T
                 if eta >= 0: print "eta>=0"; continue
-                alphas[j] -= labelMat[j]*(Ei - Ej)/eta
-                alphas[j] = clipAlpha(alphas[j],H,L)
+                alphas[j] -= labelMat[j]*(Ei - Ej)/eta    #未经剪辑的解
+                alphas[j] = clipAlpha(alphas[j],H,L)      #剪辑的解
                 if (abs(alphas[j] - alphaJold) < 0.00001): print "j not moving enough"; continue
+				#式7.109
                 alphas[i] += labelMat[j]*labelMat[i]*(alphaJold - alphas[j])#update i by the same amount as j
                                                                         #the update is in the oppostie direction
                 b1 = b - Ei- labelMat[i]*(alphas[i]-alphaIold)*dataMatrix[i,:]*dataMatrix[i,:].T - labelMat[j]*(alphas[j]-alphaJold)*dataMatrix[i,:]*dataMatrix[j,:].T
@@ -68,11 +72,11 @@ def smoSimple(dataMatIn, classLabels, C, toler, maxIter):
         else: iter = 0
         print "iteration number: %d" % iter
     return b,alphas
-
+#输入：数据集；第i个实例；核函数信息的元组（三个元素）
 def kernelTrans(X, A, kTup): #calc the kernel or transform data to a higher dimensional space
     m,n = shape(X)
     K = mat(zeros((m,1)))
-    if kTup[0]=='lin': K = X * A.T   #linear kernel
+    if kTup[0]=='lin': K = X * A.T   #kTup[0]存储的是核函数类型的字符串，linear kernel
     elif kTup[0]=='rbf':
         for j in range(m):
             deltaRow = X[j,:] - A
@@ -121,7 +125,7 @@ def selectJ(i, oS, Ei):         #this is the second choice -heurstic, and calcs 
 def updateEk(oS, k):#after any alpha has changed update the new value in the cache
     Ek = calcEk(oS, k)
     oS.eCache[k] = [1,Ek]
-        
+#使用核函数需要修改此函数        
 def innerL(i, oS):
     Ei = calcEk(oS, i)
     if ((oS.labelMat[i]*Ei < -oS.tol) and (oS.alphas[i] < oS.C)) or ((oS.labelMat[i]*Ei > oS.tol) and (oS.alphas[i] > 0)):
@@ -171,7 +175,7 @@ def smoP(dataMatIn, classLabels, C, toler, maxIter,kTup=('lin', 0)):    #full Pl
         elif (alphaPairsChanged == 0): entireSet = True  
         print "iteration number: %d" % iter
     return oS.b,oS.alphas
-
+#利用alphas的值得到w的值；#使用核函数需要修改此函数
 def calcWs(alphas,dataArr,classLabels):
     X = mat(dataArr); labelMat = mat(classLabels).transpose()
     m,n = shape(X)
@@ -184,15 +188,15 @@ def testRbf(k1=1.3):
     dataArr,labelArr = loadDataSet('testSetRBF.txt')
     b,alphas = smoP(dataArr, labelArr, 200, 0.0001, 10000, ('rbf', k1)) #C=200 important
     datMat=mat(dataArr); labelMat = mat(labelArr).transpose()
-    svInd=nonzero(alphas.A>0)[0]
+    svInd=nonzero(alphas.A>0)[0]            #matrix.A base array：返回矩阵基于的数组
     sVs=datMat[svInd] #get matrix of only support vectors
     labelSV = labelMat[svInd];
     print "there are %d Support Vectors" % shape(sVs)[0]
     m,n = shape(datMat)
     errorCount = 0
     for i in range(m):
-        kernelEval = kernelTrans(sVs,datMat[i,:],('rbf', k1))
-        predict=kernelEval.T * multiply(labelSV,alphas[svInd]) + b
+        kernelEval = kernelTrans(sVs,datMat[i,:],('rbf', k1))           #返回k矩阵
+        predict=kernelEval.T * multiply(labelSV,alphas[svInd]) + b       
         if sign(predict)!=sign(labelArr[i]): errorCount += 1
     print "the training error rate is: %f" % (float(errorCount)/m)
     dataArr,labelArr = loadDataSet('testSetRBF2.txt')
@@ -215,7 +219,7 @@ def img2vector(filename):
     return returnVect
 
 def loadImages(dirName):
-    from os import listdir
+    from os import listdir                         #在Python中可以使用os.listdir()函数获得指定目录中的内容
     hwLabels = []
     trainingFileList = listdir(dirName)           #load the training set
     m = len(trainingFileList)
@@ -230,22 +234,22 @@ def loadImages(dirName):
     return trainingMat, hwLabels    
 
 def testDigits(kTup=('rbf', 10)):
-    dataArr,labelArr = loadImages('trainingDigits')
-    b,alphas = smoP(dataArr, labelArr, 200, 0.0001, 10000, kTup)
+    dataArr,labelArr = loadImages('trainingDigits')                     #获得标签和数据
+    b,alphas = smoP(dataArr, labelArr, 200, 0.0001, 10000, kTup)        #求解参数，序列最小化
     datMat=mat(dataArr); labelMat = mat(labelArr).transpose()
-    svInd=nonzero(alphas.A>0)[0]
-    sVs=datMat[svInd] 
+    svInd=nonzero(alphas.A>0)[0]                                        #通过alpha选取支持向量
+    sVs=datMat[svInd]                                                                                    
     labelSV = labelMat[svInd];
     print "there are %d Support Vectors" % shape(sVs)[0]
     m,n = shape(datMat)
     errorCount = 0
-    for i in range(m):
-        kernelEval = kernelTrans(sVs,datMat[i,:],kTup)
-        predict=kernelEval.T * multiply(labelSV,alphas[svInd]) + b
+    for i in range(m):                                                   #求解核矩阵
+        kernelEval = kernelTrans(sVs,datMat[i,:],kTup)                   
+        predict=kernelEval.T * multiply(labelSV,alphas[svInd]) + b       #预测
         if sign(predict)!=sign(labelArr[i]): errorCount += 1
     print "the training error rate is: %f" % (float(errorCount)/m)
-    dataArr,labelArr = loadImages('testDigits')
-    errorCount = 0
+    dataArr,labelArr = loadImages('testDigits')                          #使用不同的核函数测试
+    errorCount = 0                    
     datMat=mat(dataArr); labelMat = mat(labelArr).transpose()
     m,n = shape(datMat)
     for i in range(m):
@@ -278,7 +282,7 @@ def calcEkK(oS, k):
 def selectJK(i, oS, Ei):         #this is the second choice -heurstic, and calcs Ej
     maxK = -1; maxDeltaE = 0; Ej = 0
     oS.eCache[i] = [1,Ei]  #set valid #choose the alpha that gives the maximum delta E
-    validEcacheList = nonzero(oS.eCache[:,0].A)[0]
+    validEcacheList = nonzero(oS.eCache[:,0].A)[0]                    #返回非零元素值的信息，这些信息中包括 两个矩阵， 包含了相应维度上非零元素所在的行标号，与列标标号
     if (len(validEcacheList)) > 1:
         for k in validEcacheList:   #loop through valid Ecache values and find the one that maximizes delta E
             if k == i: continue #don't calc for i, waste of time
@@ -323,7 +327,7 @@ def innerLK(i, oS):
         else: oS.b = (b1 + b2)/2.0
         return 1
     else: return 0
-
+#完整的代码
 def smoPK(dataMatIn, classLabels, C, toler, maxIter):    #full Platt SMO
     oS = optStruct(mat(dataMatIn),mat(classLabels).transpose(),C,toler)
     iter = 0
